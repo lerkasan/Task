@@ -1,0 +1,12 @@
+version: '3'
+services:
+    metrics:
+        build: .
+        image: test_task_lerkasan:latest
+        container_name: test_task_lerkasan
+        pid: host
+        ipc: host
+        environment:
+            - arguments=ps cpu mem disk
+        volumes:
+            - "/etc/passwd:/etc/passwd"
