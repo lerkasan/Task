@@ -5,12 +5,15 @@ import sys
 import psutil
 import time
 import datetime
-# import collections
 
+# PROCFS_PATH is used by psutils to calculate processes "read/write bytes" metric
+# Default value is "/proc"
+# For docker container value "/host/proc" is set in Dockerfile
 if 'PROCFS_PATH' in os.environ:
     psutil.PROCFS_PATH = os.environ.get("PROCFS_PATH")
 
 
+# Nicely formatted printed output of psutil tuple results passed as stats argument
 def print_given_stats(stats, **kwargs):
     end = kwargs.get('end', None)
     named = kwargs.get('named', None)
@@ -31,6 +34,7 @@ def print_given_stats(stats, **kwargs):
         print()
 
 
+# Nicely formatted printed output in bytes, MB and GB of psutil memory or I/O results passed as stats argument
 def print_in_mb_gb(stats):
     print('Usage in: %13s %12s %9s' % ('bytes', 'MB', 'GB'))
     for stat in stats._fields:
@@ -57,8 +61,6 @@ def print_cpu_stats():
     print_given_stats(psutil.cpu_times_percent(interval=0.5))  #Interval 0.5 gives more reliable cpu usage percents than intervals less than 0.5
     print('\nCPU times in seconds:')
     print(print_given_stats(psutil.cpu_times()))
-    # print(psutil.cpu_count())
-    # print(psutil.cpu_freq())
 
 
 def print_disk_stats():
@@ -77,6 +79,47 @@ def print_disk_stats():
     print_given_stats(psutil.disk_io_counters())
 
 
+def print_processes():
+    print("\n%-10s %-25s %-40s %-10s %-15s %-25s %-8s %-8s %-15s %-15s %-15s %-15s"
+          % ('pid', 'user', 'process', 'parent', 'status', 'started', 'CPU %', 'RAM %', 'read bytes', 'written bytes', 'read MB', 'written MB'))
+    for proc in psutil.process_iter(
+            attrs=['pid', 'name', 'username', 'ppid', 'status', 'create_time', 'memory_percent']):
+        proc.cpu_percent(interval=None)
+        with proc.oneshot():
+            proc.cpu_percent(interval=None)
+            started = datetime.datetime.fromtimestamp(proc.create_time()).strftime("%d-%m-%Y %H:%M:%S")
+            pid = proc.info['pid']
+            io_file = psutil.PROCFS_PATH + "/" + str(pid) + "/io"
+# /proc/{pid}/io file for many system processes is accessible only if script is executed by root. So check of accessibility is needed
+            if not os.access(io_file, os.R_OK):
+                print("%-10s %-25s %-40s %-10s %-15s %-25s %-8.2f %-8.2f %-15s %-15s %-15s %-15s" % (
+                    proc.pid, proc.username(), proc.name(), proc.ppid(), proc.status(), started,
+                    proc.cpu_percent(interval=0.1), proc.memory_percent(), 'n/a', 'n/a', 'n/a', 'n/a'))
+            else:
+                try:
+                    io_count = proc.io_counters()
+                    read_bytes = getattr(io_count, 'read_bytes')
+                    write_bytes = getattr(io_count, 'write_bytes')
+                    print("%-10s %-25s %-40s %-10s %-15s %-25s %-8.2f %-8.2f %-15s %-15s %-15.2f %-15.2f" % (
+                        proc.pid, proc.username(), proc.name(), proc.ppid(), proc.status(), started,
+                        proc.cpu_percent(interval=0.1), proc.memory_percent(), read_bytes, write_bytes, read_bytes/1024/1024, write_bytes/1024/1024))
+                except psutil._exceptions.AccessDenied:
+                    print("%-10s %-25s %-40s %-10s %-15s %-25s %-8.2f %-8.2f %-15s %-15s %-15s %-15s" % (
+                        proc.pid, proc.username(), proc.name(), proc.ppid(), proc.status(), started,
+                        proc.cpu_percent(interval=0.1), proc.memory_percent(), 'n/a', 'n/a', 'n/a', 'n/a'))
+
+
+# Prints info about this script execution environment
+def print_program_info():
+    print("Environment variables: ", psutil.Process().environ())
+    print("Memory usage by current script: ", psutil.Process().memory_percent(), "%")
+    print("CPU usage by current script: ", psutil.Process().cpu_percent(), "%")
+    print("Current folder: ", psutil.Process().cwd())
+    print("Current user: ", psutil.Process().username())
+
+
+# Returns total CPU usage time in seconds since boot
+# Used in Custom alternative calculation to psutil.Process.cpu_percent()
 def cpu_usage_time_since_boot():
     total_cpu_time_since_boot = 0
     stats = psutil.cpu_times()
@@ -87,6 +130,7 @@ def cpu_usage_time_since_boot():
     return total_cpu_usage_time_since_boot
 
 
+# Custom alternative calculation to psutil.Process.cpu_times(). Just to compare results with psutil
 def proc_cpu_time(pid):
     proc_times = 0
     proc = psutil.Process(pid)
@@ -97,6 +141,7 @@ def proc_cpu_time(pid):
     return proc_times
 
 
+# Custom alternative calculation to psutil.Process.cpu_percent(). Just to compare results with psutil
 def proc_cpu_percent(pid):
     previous_cpu_usage_time_since_boot = cpu_usage_time_since_boot()
     previous_proc_times = proc_cpu_time(pid)
@@ -109,52 +154,7 @@ def proc_cpu_percent(pid):
     dif_cpu_usage_time = current_cpu_usage_time_since_boot - previous_cpu_usage_time_since_boot
     dif_proc_times = current_proc_times - previous_proc_times
     proc_cpu_time_percent = 100 * dif_proc_times / dif_cpu_usage_time
-
-    # print("\ndif_cpu_usage_time", dif_cpu_usage_time)
-    # print("\ndif_proc_times", dif_proc_times)
-    # print("\nproc_cpu_percent",  proc_cpu_percent)
     return proc_cpu_time_percent
-
-
-def print_processes():
-    print("\n%-10s %-25s %-40s %-10s %-15s %-25s %-8s %-8s %-15s %-15s %-15s %-15s"
-          % ('pid', 'user', 'process', 'parent', 'status', 'started', 'CPU %', 'RAM %', 'read bytes', 'written bytes', 'read MB', 'written MB'))
-    for proc in psutil.process_iter(
-            attrs=['pid', 'name', 'username', 'ppid', 'status', 'create_time', 'memory_percent']):
-        proc.cpu_percent(interval=None)
-        with proc.oneshot():
-            proc.cpu_percent(interval=None)
-            started = datetime.datetime.fromtimestamp(proc.create_time()).strftime("%d-%m-%Y %H:%M:%S")
-            pid = proc.info['pid']
-            io_file = psutil.PROCFS_PATH + "/" + str(pid) + "/io"
-            if not os.access(io_file, os.R_OK):
-                print("%-10s %-25s %-40s %-10s %-15s %-25s %-8.2f %-8.2f %-15s %-15s %-15s %-15s" % (
-                    proc.pid, proc.username(), proc.name(), proc.ppid(), proc.status(), started,
-                    proc.cpu_percent(interval=0.1), proc.memory_percent(), 'n/a', 'n/a', 'n/a', 'n/a'))
-                # total_mem_usage_percent += proc.memory_percent()
-            else:
-                try:
-                    io_count = proc.io_counters()
-                    read_bytes = getattr(io_count, 'read_bytes')
-                    write_bytes = getattr(io_count, 'write_bytes')
-                    print("%-10s %-25s %-40s %-10s %-15s %-25s %-8.2f %-8.2f %-15s %-15s %-15.2f %-15.2f" % (
-                        proc.pid, proc.username(), proc.name(), proc.ppid(), proc.status(), started,
-                        proc.cpu_percent(interval=0.1), proc.memory_percent(), read_bytes, write_bytes, read_bytes/1024/1024, write_bytes/1024/1024))
-                    # total_mem_usage_percent += proc.memory_percent()
-                except psutil._exceptions.AccessDenied:
-                    print("%-10s %-25s %-40s %-10s %-15s %-25s %-8.2f %-8.2f %-15s %-15s %-15s %-15s" % (
-                        proc.pid, proc.username(), proc.name(), proc.ppid(), proc.status(), started,
-                        proc.cpu_percent(interval=0.1), proc.memory_percent(), 'n/a', 'n/a', 'n/a', 'n/a'))
-    #             total_mem_usage_percent += proc.memory_percent()
-    # print(total_mem_usage_percent)
-
-
-def print_program_info():
-    print("Environment variables: ", psutil.Process().environ())
-    print("Memory usage by current script: ", psutil.Process().memory_percent(), "%")
-    print("CPU usage by current script: ", psutil.Process().cpu_percent(), "%")
-    print("Current folder: ", psutil.Process().cwd())
-    print("Current user: ", psutil.Process().username())
 
 
 def application():
@@ -168,12 +168,14 @@ def application():
     args = ''
     valid_args_count = 0
 
+# Ignores invalid arguments (not listed in stat_args) and prints metrics only about valid arguments
     for program_arg in sys.argv:
         for arg, func in stat_args:
             if program_arg == arg:
                 valid_args_count += 1
                 func()
 
+# If no valid arguments were passed prints message about possible argument options
     if valid_args_count == 0:
         for index in range(1, len(sys.argv)):
             args = args + sys.argv[index] + ' '
@@ -186,19 +188,3 @@ def application():
 
 if __name__ == '__main__':
     application()
-
-
-# def count_cpu_times():
-#     cpu_times_user_total = 0
-#     cpu_times_system_total = 0
-#     processes_cpu_time = {}
-#     Cpu_times_per_pid = collections.namedtuple('Cpu_times_per_pid', 'pid cpu_times_user cpu_times_system')
-#     Total_cpu_time = collections.namedtuple('Total_cpu_time', 'cpu_times_user_total cpu_times_system_total')
-#     for proc in psutil.process_iter(attrs=['pid', 'cpu_times', 'memory_full_info']):
-#         cpu_times_user_total += getattr(proc.info['cpu_times'], 'user')
-#         cpu_times_system_total += getattr(proc.info['cpu_times'], 'system')
-#         cpu_times_user = getattr(proc.info['cpu_times'], 'user')
-#         cpu_times_system = getattr(proc.info['cpu_times'], 'system')
-#         processes_cpu_time[proc.info['pid']] = Cpu_times_per_pid(proc.info['pid'], cpu_times_user, cpu_times_system)
-#     total_cpu_time = Total_cpu_time(cpu_times_user_total, cpu_times_system_total)
-#     return total_cpu_time, processes_cpu_time

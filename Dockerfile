@@ -9,11 +9,12 @@ RUN apk add --no-cache gcc \
     pip3 install --upgrade pip && \
     pip3 install psutil
 
-#ARG arguments
-ENV arguments ""
+# PROCFS_PATH is used by psutils to calculate processes "read/write bytes" metric. Default value is "/proc"
+# For docker container value "/host/proc" is set in Dockerfile because host /proc folder is mounted there
 ENV PROCFS_PATH "/host/proc"
+ENV arguments ""
 
-COPY metrics.py .
-RUN chmod +x metrics.py
+COPY metrics .
+RUN chmod +x metrics
 
-CMD ["sh", "-c", "./metrics.py ${arguments}"]
+CMD ["sh", "-c", "./metrics ${arguments}"]
