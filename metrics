@@ -16,6 +16,9 @@ if 'PROCFS_PATH' in os.environ:
 # Nicely formatted printed output of psutil tuple results passed as stats argument
 def print_given_stats(stats, **kwargs):
     end = kwargs.get('end', None)
+# named argument instructs whether to print metrics name before value (e.g printing two columns: left metrics name, right metrics value).
+# If named argument is omitted than metrics name is printed by default.
+# It's useful to set named=False when a table is printed and metrics names are placed in header row of the table rather then in left column.
     named = kwargs.get('named', None)
     if end is None:
         if named or named is None:
