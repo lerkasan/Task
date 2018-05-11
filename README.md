@@ -9,6 +9,7 @@ Available argument options:
 - *mem* - prints info about RAM and Swap usage
 - *cpu* - prints info about CPU usage
 - *disk* - prints info about partitions and disk space usage
+- *self* - prints info about RAM and CPU resources used by this script
 
 Wrong arguments are ignored.
 

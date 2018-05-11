@@ -86,7 +86,6 @@ def print_processes():
             attrs=['pid', 'name', 'username', 'ppid', 'status', 'create_time', 'memory_percent']):
         proc.cpu_percent(interval=None)
         with proc.oneshot():
-            proc.cpu_percent(interval=None)
             started = datetime.datetime.fromtimestamp(proc.create_time()).strftime("%d-%m-%Y %H:%M:%S")
             pid = proc.info['pid']
             io_file = psutil.PROCFS_PATH + "/" + str(pid) + "/io"
