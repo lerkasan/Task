@@ -59,7 +59,7 @@ def print_cpu_stats():
     psutil.cpu_times_percent(interval=None)
     print('\nCPU usage in percents:')
     print_given_stats(psutil.cpu_times_percent(interval=0.5))  #Interval 0.5 gives more reliable cpu usage percents than intervals less than 0.5
-    print('\nCPU times in seconds:')
+    print('\nCPU times:')
     print(print_given_stats(psutil.cpu_times()))
 
 
